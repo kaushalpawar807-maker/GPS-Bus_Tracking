@@ -22,7 +22,12 @@ export default function SignupPage() {
       await signUp(email, password, role, fullName);
       navigate('/login');
     } catch (err) {
-      setError('Failed to create account. Please try again.');
+      // *** MODIFIED LOGGING FOR DETAILED DEBUGGING ***
+      const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred.';
+      console.error('Full Signup Error:', err); // Print the full error object to console
+      
+      // Update the error message shown to the user to include the specific reason
+      setError(`Failed to create account. Please try again. Reason: ${errorMessage.substring(0, 80)}...`);
     } finally {
       setLoading(false);
     }

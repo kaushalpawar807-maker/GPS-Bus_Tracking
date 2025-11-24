@@ -5,10 +5,14 @@ import Map from '../../components/Map';
 import { LatLngExpression } from 'leaflet';
 import { ArrowLeft, Search, MapPin } from 'lucide-react';
 
+// Combined type for a Route with its loaded Stops
+interface RouteWithStops extends Route {
+  route_stops: (RouteStop & { stops: Stop })[];
+}
+
 export default function RoutesSearch() {
-  const [routes, setRoutes] = useState<Route[]>([]);
-  const [selectedRoute, setSelectedRoute] = useState<Route | null>(null);
-  const [routeStops, setRouteStops] = useState<(RouteStop & { stops: Stop })[]>([]);
+  const [routes, setRoutes] = useState<RouteWithStops[]>([]);
+  const [selectedRoute, setSelectedRoute] = useState<RouteWithStops | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
 
@@ -16,39 +20,46 @@ export default function RoutesSearch() {
     loadRoutes();
   }, []);
 
-  useEffect(() => {
-    if (selectedRoute) {
-      loadRouteStops(selectedRoute.id);
-    }
-  }, [selectedRoute]);
-
   const loadRoutes = async () => {
+    // FIX: Eagerly load route_stops and nested stops data to display itinerary
     const { data } = await supabase
       .from('routes')
-      .select('*')
+      .select(`
+        *,
+        route_stops(
+          stop_order,
+          stops(*)
+        )
+      `)
       .eq('is_active', true)
-      .order('name');
+      .order('name')
+      // Ensure route_stops are ordered by stop_order
+      .order('stop_order', { referencedTable: 'route_stops', ascending: true }); 
 
-    setRoutes(data || []);
+    // Cast the data correctly
+    setRoutes((data as RouteWithStops[]) || []);
     setLoading(false);
   };
-
-  const loadRouteStops = async (routeId: string) => {
-    const { data } = await supabase
-      .from('route_stops')
-      .select('*, stops(*)')
-      .eq('route_id', routeId)
-      .order('stop_order');
-
-    setRouteStops(data || []);
-  };
+  
+  // FIX: When selecting a route, filter the already loaded data instead of re-fetching
+  const handleSelectRoute = (route: RouteWithStops) => {
+    // Ensure stops are correctly sorted before setting the state
+    const sortedRoute = {
+      ...route,
+      route_stops: (route.route_stops || []).sort((a, b) => a.stop_order - b.stop_order)
+    };
+    setSelectedRoute(sortedRoute);
+  }
 
   const filteredRoutes = routes.filter(route =>
     route.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     route.description?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  const routeStops = selectedRoute?.route_stops || [];
+  
   const mapMarkers = routeStops.map(rs => ({
+    // Use optional chaining as rs.stops might technically be null if RLS failed (though policy should fix)
     position: [rs.stops.latitude, rs.stops.longitude] as LatLngExpression,
     label: `${rs.stop_order}. ${rs.stops.name}`,
     type: 'stop' as const,
@@ -93,14 +104,14 @@ export default function RoutesSearch() {
           <div className="lg:col-span-1">
             <div className="bg-white rounded-xl shadow-sm p-6 border border-slate-100">
               <h2 className="text-lg font-medium text-slate-800 mb-4">Available Routes</h2>
-              <div className="space-y-2">
+              <div className="space-y-2 max-h-[500px] overflow-y-auto"> {/* Added max height and scroll for responsiveness */}
                 {filteredRoutes.length === 0 ? (
                   <p className="text-slate-500 text-sm">No routes found</p>
                 ) : (
                   filteredRoutes.map(route => (
                     <button
                       key={route.id}
-                      onClick={() => setSelectedRoute(route)}
+                      onClick={() => handleSelectRoute(route)}
                       className={`w-full text-left p-4 rounded-lg border transition ${
                         selectedRoute?.id === route.id
                           ? 'border-slate-800 bg-slate-50'
@@ -123,16 +134,24 @@ export default function RoutesSearch() {
               <div className="space-y-6">
                 <div className="bg-white rounded-xl shadow-sm p-6 border border-slate-100">
                   <h2 className="text-lg font-medium text-slate-800 mb-4">{selectedRoute.name}</h2>
-                  <Map markers={mapMarkers} routes={routeLine} className="h-[400px]" />
+                  <Map 
+                    markers={mapMarkers} 
+                    routes={routeLine} 
+                    className="h-[400px]" 
+                    // Center map on the first stop, or Pune if empty
+                    center={routeStops.length > 0 
+                        ? [routeStops[0].stops.latitude, routeStops[0].stops.longitude] 
+                        : undefined}
+                  />
                 </div>
 
                 <div className="bg-white rounded-xl shadow-sm p-6 border border-slate-100">
                   <h2 className="text-lg font-medium text-slate-800 mb-4">Stops</h2>
                   {routeStops.length === 0 ? (
-                    <p className="text-slate-500 text-sm">No stops available</p>
+                    <p className="text-slate-500 text-sm">No stops available for this route itinerary.</p>
                   ) : (
                     <div className="space-y-2">
-                      {routeStops.map(rs => (
+                      {routeStops.map((rs) => ( // Removed unused variable 'index'
                         <div key={rs.id} className="flex items-center p-3 border border-slate-200 rounded-lg">
                           <div className="bg-slate-100 w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium text-slate-700 mr-3">
                             {rs.stop_order}

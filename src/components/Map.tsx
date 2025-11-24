@@ -1,7 +1,7 @@
-import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
-import { LatLngExpression, Icon } from 'leaflet';
+import { MapContainer, TileLayer, Marker, Popup, Polyline, useMapEvents } from 'react-leaflet';
+import { LatLngExpression, Icon } from 'leaflet'; 
 import 'leaflet/dist/leaflet.css';
-import { useEffect } from 'react';
+import { useEffect } from 'react'; 
 
 const PUNE_CENTER: LatLngExpression = [18.5204, 73.8567];
 
@@ -28,14 +28,34 @@ interface MapProps {
     color?: string;
   }>;
   className?: string;
+  onMapClick?: (lat: number, lng: number) => void;
+  // Prop to signal a map needs its size invalidated (e.g., when a modal opens)
+  shouldInvalidateSize?: boolean; 
+  children?: React.ReactNode;
 }
 
-function MapUpdater({ center }: { center: LatLngExpression }) {
-  const map = useMap();
+// Custom component to handle map centering and click events (Runs inside MapContainer)
+function MapUpdater({ center, onMapClick, invalidate }: { center: LatLngExpression, onMapClick?: (lat: number, lng: number) => void, invalidate?: boolean }) {
+  const map = useMapEvents({
+    click(e) {
+      if (onMapClick) {
+        onMapClick(e.latlng.lat, e.latlng.lng);
+      }
+    }
+  });
 
   useEffect(() => {
     map.setView(center, map.getZoom());
   }, [center, map]);
+  
+  // CRITICAL FIX: Force map resize when requested (e.g., when modal opens)
+  useEffect(() => {
+    if (invalidate) {
+        // Use setTimeout(0) to ensure invalidation runs *after* the modal has finished rendering and transition.
+        setTimeout(() => map.invalidateSize(), 0);
+    }
+  }, [invalidate, map]);
+
 
   return null;
 }
@@ -45,20 +65,30 @@ export default function Map({
   zoom = 13,
   markers = [],
   routes = [],
-  className = 'h-96'
+  className = 'h-96',
+  onMapClick,
+  shouldInvalidateSize = false,
+  children,
 }: MapProps) {
+  // We use a key change to force MapContainer to re-render when the center changes
+  // This helps ensure consistency when switching locations.
+  const mapKey = JSON.stringify(center);
+
   return (
     <MapContainer
+      key={mapKey} // Force re-render on center change
       center={center}
       zoom={zoom}
       className={className}
       style={{ borderRadius: '12px' }}
+      scrollWheelZoom={onMapClick ? false : 'center'} 
     >
       <TileLayer
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
       />
-      <MapUpdater center={center} />
+      {/* Pass invalidate flag directly to the updater */}
+      <MapUpdater center={center} onMapClick={onMapClick} invalidate={shouldInvalidateSize} />
 
       {routes.map((route, idx) => (
         <Polyline
@@ -79,6 +109,8 @@ export default function Map({
           <Popup>{marker.label}</Popup>
         </Marker>
       ))}
+
+      {children}
     </MapContainer>
   );
 }
