@@ -1,21 +1,24 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
-import Layout from './components/Layout';
+import DashboardLayout from './layouts/DashboardLayout';
 
 import LoginPage from './pages/auth/LoginPage';
 import SignupPage from './pages/auth/SignupPage';
 
 import AdminDashboard from './pages/admin/AdminDashboard';
 import RoutesManagement from './pages/admin/RoutesManagement';
+import RouteStudio from './pages/admin/RouteStudio';
 import BusesManagement from './pages/admin/BusesManagement';
 import TicketsView from './pages/admin/TicketsView';
+import Reports from './pages/admin/Reports';
 
 import UserDashboard from './pages/user/UserDashboard';
 import RoutesSearch from './pages/user/RoutesSearch';
 import BookTicket from './pages/user/BookTicket';
 import MyTickets from './pages/user/MyTickets';
 import NearbyStops from './pages/user/NearbyStops';
+import LiveTrack from './pages/user/LiveTrack';
 
 import DriverDashboard from './pages/driver/DriverDashboard';
 import ConductorDashboard from './pages/conductor/ConductorDashboard';
@@ -53,62 +56,80 @@ function App() {
             </ProtectedRoute>
           } />
 
+          {/* Admin Routes */}
           <Route path="/admin" element={
             <ProtectedRoute allowedRoles={['admin']}>
-              <Layout><AdminDashboard /></Layout>
+              <DashboardLayout><AdminDashboard /></DashboardLayout>
             </ProtectedRoute>
           } />
           <Route path="/admin/routes" element={
             <ProtectedRoute allowedRoles={['admin']}>
-              <Layout><RoutesManagement /></Layout>
+              <DashboardLayout><RoutesManagement /></DashboardLayout>
+            </ProtectedRoute>
+          } />
+          <Route path="/admin/route-studio" element={
+            <ProtectedRoute allowedRoles={['admin']}>
+              <DashboardLayout><RouteStudio /></DashboardLayout>
             </ProtectedRoute>
           } />
           <Route path="/admin/buses" element={
             <ProtectedRoute allowedRoles={['admin']}>
-              <Layout><BusesManagement /></Layout>
+              <DashboardLayout><BusesManagement /></DashboardLayout>
             </ProtectedRoute>
           } />
           <Route path="/admin/tickets" element={
             <ProtectedRoute allowedRoles={['admin']}>
-              <Layout><TicketsView /></Layout>
+              <DashboardLayout><TicketsView /></DashboardLayout>
+            </ProtectedRoute>
+          } />
+          <Route path="/admin/reports" element={
+            <ProtectedRoute allowedRoles={['admin']}>
+              <DashboardLayout><Reports /></DashboardLayout>
             </ProtectedRoute>
           } />
 
+          {/* User Routes */}
           <Route path="/user" element={
             <ProtectedRoute allowedRoles={['user']}>
-              <Layout><UserDashboard /></Layout>
+              <DashboardLayout><UserDashboard /></DashboardLayout>
             </ProtectedRoute>
           } />
           <Route path="/user/routes" element={
             <ProtectedRoute allowedRoles={['user']}>
-              <Layout><RoutesSearch /></Layout>
+              <DashboardLayout><RoutesSearch /></DashboardLayout>
             </ProtectedRoute>
           } />
           <Route path="/user/book" element={
             <ProtectedRoute allowedRoles={['user']}>
-              <Layout><BookTicket /></Layout>
+              <DashboardLayout><BookTicket /></DashboardLayout>
             </ProtectedRoute>
           } />
           <Route path="/user/tickets" element={
             <ProtectedRoute allowedRoles={['user']}>
-              <Layout><MyTickets /></Layout>
+              <DashboardLayout><MyTickets /></DashboardLayout>
             </ProtectedRoute>
           } />
           <Route path="/user/nearby" element={
             <ProtectedRoute allowedRoles={['user']}>
-              <Layout><NearbyStops /></Layout>
+              <DashboardLayout><NearbyStops /></DashboardLayout>
+            </ProtectedRoute>
+          } />
+          <Route path="/user/track/:busId" element={
+            <ProtectedRoute allowedRoles={['user']}>
+              <DashboardLayout><LiveTrack /></DashboardLayout>
             </ProtectedRoute>
           } />
 
+          {/* Driver/Conductor Routes */}
           <Route path="/driver" element={
             <ProtectedRoute allowedRoles={['driver']}>
-              <Layout><DriverDashboard /></Layout>
+              <DashboardLayout><DriverDashboard /></DashboardLayout>
             </ProtectedRoute>
           } />
 
           <Route path="/conductor" element={
             <ProtectedRoute allowedRoles={['conductor']}>
-              <Layout><ConductorDashboard /></Layout>
+              <DashboardLayout><ConductorDashboard /></DashboardLayout>
             </ProtectedRoute>
           } />
         </Routes>

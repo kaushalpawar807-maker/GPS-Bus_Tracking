@@ -72,18 +72,18 @@ export default function UserDashboard() {
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           <ActionCard
+            icon={<MapPin className="w-6 h-6 animate-pulse" />}
+            title="Live Tracking"
+            description="Track buses in real-time"
+            link="/user/track/bus1"
+            color="bg-red-50 text-red-600"
+          />
+          <ActionCard
             icon={<Search className="w-6 h-6" />}
             title="Search Routes"
             description="Find routes to your destination"
             link="/user/routes"
             color="bg-blue-50 text-blue-600"
-          />
-          <ActionCard
-            icon={<Navigation className="w-6 h-6" />}
-            title="Nearby Stops"
-            description="Find stops near you"
-            link="/user/nearby"
-            color="bg-green-50 text-green-600"
           />
           <ActionCard
             icon={<Ticket className="w-6 h-6" />}

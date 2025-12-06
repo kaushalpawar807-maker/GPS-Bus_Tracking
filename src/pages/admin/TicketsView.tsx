@@ -1,10 +1,16 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { supabase, Ticket } from '../../lib/supabase';
-import { ArrowLeft, Ticket as TicketIcon } from 'lucide-react';
+import DataGrid, { Column } from '../../components/DataGrid';
+
+// Extended Ticket type to include joined data
+type TicketWithDetails = Ticket & {
+  routes?: { name: string };
+  boarding_stops?: { name: string };
+  destination_stops?: { name: string };
+};
 
 export default function TicketsView() {
-  const [tickets, setTickets] = useState<Ticket[]>([]);
+  const [tickets, setTickets] = useState<TicketWithDetails[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -26,82 +32,84 @@ export default function TicketsView() {
     setLoading(false);
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'booked':
-        return 'bg-blue-50 text-blue-700';
-      case 'used':
-        return 'bg-green-50 text-green-700';
-      case 'cancelled':
-        return 'bg-red-50 text-red-700';
-      default:
-        return 'bg-slate-100 text-slate-600';
-    }
+  const statusColors = {
+    booked: 'bg-blue-50 text-blue-700',
+    used: 'bg-green-50 text-green-700',
+    cancelled: 'bg-red-50 text-red-700',
   };
 
-  if (loading) {
-    return <div className="min-h-screen bg-slate-50 flex items-center justify-center">Loading...</div>;
-  }
+  const columns: Column<TicketWithDetails>[] = [
+    {
+      key: 'user_id',
+      header: 'Passenger',
+      render: (ticket) => (
+        <span className="font-medium text-slate-800">
+          User #{ticket.user_id.substring(0, 5)}...
+        </span>
+      ),
+    },
+    {
+      key: 'route',
+      header: 'Route',
+      render: (ticket) => ticket.routes?.name || 'N/A',
+    },
+    {
+      key: 'seat',
+      header: 'Seat',
+      render: (ticket) => (
+        <span className="bg-slate-100 px-2 py-1 rounded text-xs font-mono">
+          1{ticket.id.substring(0, 1)}
+        </span>
+      ),
+    },
+    {
+      key: 'fare',
+      header: 'Fare',
+      render: () => '₹250',
+    },
+    {
+      key: 'trip',
+      header: 'Trip Details',
+      render: (ticket) => (
+        <div className="flex flex-col">
+          <span className="text-xs text-slate-400">From: {ticket.boarding_stops?.name}</span>
+          <span className="text-xs text-slate-400">To: {ticket.destination_stops?.name}</span>
+        </div>
+      ),
+    },
+    {
+      key: 'booking_date',
+      header: 'Date',
+      render: (ticket) => new Date(ticket.booking_date).toLocaleDateString(),
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      render: (ticket) => (
+        <span className={`text-xs px-2 py-1 rounded font-medium ${statusColors[ticket.status as keyof typeof statusColors] || 'bg-slate-100 text-slate-600'}`}>
+          {ticket.status.toUpperCase()}
+        </span>
+      ),
+    },
+  ];
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <div className="max-w-7xl mx-auto px-6 py-8">
-        <div className="flex items-center mb-8">
-          <Link to="/admin" className="mr-4">
-            <ArrowLeft className="w-6 h-6 text-slate-600 hover:text-slate-800" />
-          </Link>
-          <div>
-            <h1 className="text-3xl font-semibold text-slate-800">Ticket Bookings</h1>
-            <p className="text-slate-500 mt-1">View all ticket bookings</p>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
-          {tickets.length === 0 ? (
-            <div className="p-12 text-center">
-              <TicketIcon className="w-12 h-12 text-slate-300 mx-auto mb-4" />
-              <p className="text-slate-500">No tickets booked yet</p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-slate-50 border-b border-slate-200">
-                  <tr>
-                    <th className="px-6 py-4 text-left text-sm font-medium text-slate-700">Route</th>
-                    <th className="px-6 py-4 text-left text-sm font-medium text-slate-700">Boarding Stop</th>
-                    <th className="px-6 py-4 text-left text-sm font-medium text-slate-700">Destination</th>
-                    <th className="px-6 py-4 text-left text-sm font-medium text-slate-700">Booking Date</th>
-                    <th className="px-6 py-4 text-left text-sm font-medium text-slate-700">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-200">
-                  {tickets.map(ticket => (
-                    <tr key={ticket.id} className="hover:bg-slate-50">
-                      <td className="px-6 py-4 text-sm text-slate-800">
-                        {ticket.routes?.name || 'N/A'}
-                      </td>
-                      <td className="px-6 py-4 text-sm text-slate-600">
-                        {ticket.boarding_stops?.name || 'N/A'}
-                      </td>
-                      <td className="px-6 py-4 text-sm text-slate-600">
-                        {ticket.destination_stops?.name || 'N/A'}
-                      </td>
-                      <td className="px-6 py-4 text-sm text-slate-600">
-                        {new Date(ticket.booking_date).toLocaleString()}
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className={`text-xs px-2 py-1 rounded ${getStatusColor(ticket.status)}`}>
-                          {ticket.status}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-800 tracking-tight">Ticket Bookings</h1>
+          <p className="text-slate-500">Monitor all user bookings in real-time.</p>
         </div>
       </div>
+
+      <DataGrid
+        columns={columns}
+        data={tickets}
+        loading={loading}
+        title="Recent Bookings"
+        description="List of all tickets generated by the system."
+        onSearch={(term) => console.log('Search:', term)}
+      />
     </div>
   );
 }

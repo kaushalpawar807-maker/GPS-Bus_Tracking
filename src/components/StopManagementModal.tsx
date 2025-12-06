@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase, Stop } from '../lib/supabase';
-import Map, { PUNE_CENTER } from './Map'; 
+import Map, { PUNE_CENTER } from './Map';
 import { geocodeSearch, GeocodedLocation } from '../utils/geocoding';
 import { MapPin, Search, Plus, X, Loader2 } from 'lucide-react';
 import { LatLngExpression } from 'leaflet';
@@ -13,9 +13,10 @@ interface StopManagementModalProps {
   onClose: () => void;
   onStopCreated: (newStop: Stop) => void;
   initialStop?: Stop; // For editing existing stops
+  existingStops?: Stop[]; // ADDED: For duplicate checking
 }
 
-export default function StopManagementModal({ onClose, onStopCreated, initialStop }: StopManagementModalProps) {
+export default function StopManagementModal({ onClose, onStopCreated, initialStop, existingStops = [] }: StopManagementModalProps) {
   const [stopName, setStopName] = useState(initialStop?.name || '');
   const [address, setAddress] = useState(initialStop?.address || '');
   // Use the safe array for initial coordinates
@@ -26,24 +27,37 @@ export default function StopManagementModal({ onClose, onStopCreated, initialSto
   const [loading, setLoading] = useState(false);
   const [mapCenter, setMapCenter] = useState<LatLngExpression>([latitude, longitude]);
   const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
-  
+
+  // Duplicate Detection State
+  const [suggestedExistingStop, setSuggestedExistingStop] = useState<Stop | null>(null);
+
   // CRITICAL FIX: Conditionally render map after a short delay for DOM stability
-  const [isMapReady, setIsMapReady] = useState(false); 
+  const [isMapReady, setIsMapReady] = useState(false);
+
+  useEffect(() => {
+    // Check for duplicates when stopName changes (debounce slightly or just direct check)
+    if (stopName && !initialStop) { // Only check if creating new
+      const exactMatch = existingStops.find(s => s.name.toLowerCase().trim() === stopName.toLowerCase().trim());
+      setSuggestedExistingStop(exactMatch || null);
+    } else {
+      setSuggestedExistingStop(null);
+    }
+  }, [stopName, existingStops, initialStop]);
 
   useEffect(() => {
     // Set the map center when editing a stop
     if (initialStop) {
       setMapCenter([initialStop.latitude, initialStop.longitude]);
     }
-    
+
     // Set a timeout to mark the map container as ready to render
     const timer = setTimeout(() => {
       setIsMapReady(true);
     }, 100); // 100ms delay ensures modal animation/size calculation finishes
 
     return () => {
-        setIsMapReady(false); // Reset on unmount
-        clearTimeout(timer);
+      setIsMapReady(false); // Reset on unmount
+      clearTimeout(timer);
     }
   }, [initialStop]);
 
@@ -56,12 +70,21 @@ export default function StopManagementModal({ onClose, onStopCreated, initialSto
     setMessage(null);
 
     const results = await geocodeSearch(searchQuery);
-    
+
     if (results.length > 0) {
       setSearchResults(results);
       // Move map center to the first result
       setMapCenter([results[0].lat, results[0].lng]);
-      setMessage({ text: `${results.length} locations found. Select one or click the map to pinpoint.`, type: 'success' });
+
+      // Auto-check if the SEARCHED name matches an existing stop
+      const searchMatch = existingStops.find(s => s.name.toLowerCase().includes(searchQuery.toLowerCase()));
+      if (searchMatch && !initialStop) {
+        setSuggestedExistingStop(searchMatch);
+        setMessage({ text: `Found ${results.length} locations. Note: A stop named "${searchMatch.name}" already exists.`, type: 'success' });
+      } else {
+        setMessage({ text: `${results.length} locations found. Select one or click the map to pinpoint.`, type: 'success' });
+      }
+
     } else {
       setMessage({ text: 'No results found for your search.', type: 'error' });
     }
@@ -83,6 +106,13 @@ export default function StopManagementModal({ onClose, onStopCreated, initialSto
     setMapCenter([result.lat, result.lng]);
     setSearchResults([]);
     setMessage({ text: `Selected: ${result.name}`, type: 'success' });
+  };
+
+  const handleUseExisting = () => {
+    if (suggestedExistingStop) {
+      onStopCreated(suggestedExistingStop);
+      onClose(); // Close modal, treating it as 'created/selected'
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -124,7 +154,7 @@ export default function StopManagementModal({ onClose, onStopCreated, initialSto
         result = data;
         if (error) throw error;
       }
-      
+
       onStopCreated(result);
       onClose();
 
@@ -156,9 +186,8 @@ export default function StopManagementModal({ onClose, onStopCreated, initialSto
           </div>
 
           {message && (
-            <div className={`mb-4 p-3 rounded-lg text-sm ${
-              message.type === 'success' ? 'bg-green-50 text-green-800 border border-green-200' : 'bg-red-50 text-red-800 border border-red-200'
-            }`}>
+            <div className={`mb-4 p-3 rounded-lg text-sm ${message.type === 'success' ? 'bg-green-50 text-green-800 border border-green-200' : 'bg-red-50 text-red-800 border border-red-200'
+              }`}>
               {message.text}
             </div>
           )}
@@ -166,7 +195,7 @@ export default function StopManagementModal({ onClose, onStopCreated, initialSto
           {/* ADDED 'overflow-hidden' to the grid container to prevent map bleed */}
           <form onSubmit={handleSubmit} className="grid grid-cols-1 lg:grid-cols-2 gap-6 overflow-hidden">
             <div className="lg:col-span-1 space-y-6">
-              
+
               {/* Stop Name */}
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-2">Stop Name (e.g., Talegaon Dabhade)</label>
@@ -178,6 +207,25 @@ export default function StopManagementModal({ onClose, onStopCreated, initialSto
                   className="w-full px-4 py-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-slate-400 focus:border-transparent outline-none"
                   placeholder="Enter stop name"
                 />
+
+                {/* DUPLICATE WARNING */}
+                {suggestedExistingStop && (
+                  <div className="mt-2 p-3 bg-amber-50 border border-amber-200 rounded-lg flex items-start">
+                    <div className="flex-1">
+                      <p className="text-sm text-amber-800 font-medium">Stop already exists!</p>
+                      <p className="text-xs text-amber-700 mt-1">
+                        "{suggestedExistingStop.name}" is already in your list.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleUseExisting}
+                      className="text-xs px-3 py-1.5 bg-amber-600 text-white rounded-md hover:bg-amber-700 transition ml-3"
+                    >
+                      Use Existing
+                    </button>
+                  </div>
+                )}
               </div>
 
               {/* Location Search/Geocoding */}
@@ -200,12 +248,12 @@ export default function StopManagementModal({ onClose, onStopCreated, initialSto
                     {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Search className="w-5 h-5" />}
                   </button>
                 </div>
-                
+
                 {/* Search Results */}
                 {searchResults.length > 0 && (
                   <div className="mt-3 max-h-40 overflow-y-auto border border-slate-200 rounded-lg bg-white shadow-sm">
                     {searchResults.map((result, index) => (
-                      <div 
+                      <div
                         key={index}
                         onClick={() => handleSelectResult(result)}
                         className="p-3 border-b border-slate-100 cursor-pointer hover:bg-slate-50 transition"
@@ -260,7 +308,7 @@ export default function StopManagementModal({ onClose, onStopCreated, initialSto
                   disabled={loading || !stopName || latitude === null || longitude === null}
                   className="flex-1 flex items-center justify-center px-4 py-2.5 bg-slate-800 text-white rounded-lg hover:bg-slate-700 transition disabled:opacity-50"
                 >
-                  {loading ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : initialStop ? 'Update Stop' : 
+                  {loading ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : initialStop ? 'Update Stop' :
                     <>
                       <Plus className="w-5 h-5 mr-2" />
                       Create Stop
@@ -269,7 +317,7 @@ export default function StopManagementModal({ onClose, onStopCreated, initialSto
                 </button>
               </div>
             </div>
-            
+
             {/* Map Column */}
             <div className="lg:col-span-1">
               <div className="bg-slate-50 rounded-xl p-4 h-[550px] flex flex-col">
@@ -278,21 +326,21 @@ export default function StopManagementModal({ onClose, onStopCreated, initialSto
                   Pin Location on Map (Click to Set)
                 </h3>
                 {/* Ensure map occupies available space */}
-                <div className="flex-1 rounded-xl overflow-hidden min-h-[400px]"> 
+                <div className="flex-1 rounded-xl overflow-hidden min-h-[400px]">
                   {isMapReady ? (
-                      <Map
-                        center={mapCenter}
-                        zoom={14}
-                        markers={currentMarkers}
-                        onMapClick={handleMapClick} // Pass the click handler
-                        className="h-full w-full"
-                        // Trigger resize after rendering
-                        shouldInvalidateSize={true} 
-                      />
+                    <Map
+                      center={mapCenter}
+                      zoom={14}
+                      markers={currentMarkers}
+                      onMapClick={handleMapClick} // Pass the click handler
+                      className="h-full w-full"
+                      // Trigger resize after rendering
+                      shouldInvalidateSize={true}
+                    />
                   ) : (
-                      <div className="h-full w-full flex items-center justify-center text-slate-500">
-                          Loading map...
-                      </div>
+                    <div className="h-full w-full flex items-center justify-center text-slate-500">
+                      Loading map...
+                    </div>
                   )}
                 </div>
                 <p className="text-xs text-slate-500 mt-2">
