@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase, Route, RouteStop, Stop } from '../../lib/supabase';
 import Map from '../../components/Map';
+import RoutingControl from '../../components/RoutingControl';
 import { LatLngExpression } from 'leaflet';
 import { ArrowLeft, Search, MapPin } from 'lucide-react';
 
@@ -34,13 +35,13 @@ export default function RoutesSearch() {
       .eq('is_active', true)
       .order('name')
       // Ensure route_stops are ordered by stop_order
-      .order('stop_order', { referencedTable: 'route_stops', ascending: true }); 
+      .order('stop_order', { referencedTable: 'route_stops', ascending: true });
 
     // Cast the data correctly
     setRoutes((data as RouteWithStops[]) || []);
     setLoading(false);
   };
-  
+
   // FIX: When selecting a route, filter the already loaded data instead of re-fetching
   const handleSelectRoute = (route: RouteWithStops) => {
     // Ensure stops are correctly sorted before setting the state
@@ -57,7 +58,7 @@ export default function RoutesSearch() {
   );
 
   const routeStops = selectedRoute?.route_stops || [];
-  
+
   const mapMarkers = routeStops.map(rs => ({
     // Use optional chaining as rs.stops might technically be null if RLS failed (though policy should fix)
     position: [rs.stops.latitude, rs.stops.longitude] as LatLngExpression,
@@ -65,10 +66,7 @@ export default function RoutesSearch() {
     type: 'stop' as const,
   }));
 
-  const routeLine = routeStops.length > 0 ? [{
-    positions: routeStops.map(rs => [rs.stops.latitude, rs.stops.longitude] as LatLngExpression),
-    color: '#64748b',
-  }] : [];
+
 
   if (loading) {
     return <div className="min-h-screen bg-slate-50 flex items-center justify-center">Loading...</div>;
@@ -112,11 +110,10 @@ export default function RoutesSearch() {
                     <button
                       key={route.id}
                       onClick={() => handleSelectRoute(route)}
-                      className={`w-full text-left p-4 rounded-lg border transition ${
-                        selectedRoute?.id === route.id
+                      className={`w-full text-left p-4 rounded-lg border transition ${selectedRoute?.id === route.id
                           ? 'border-slate-800 bg-slate-50'
                           : 'border-slate-200 hover:border-slate-300'
-                      }`}
+                        }`}
                     >
                       <div className="font-medium text-slate-800">{route.name}</div>
                       {route.description && (
@@ -134,15 +131,20 @@ export default function RoutesSearch() {
               <div className="space-y-6">
                 <div className="bg-white rounded-xl shadow-sm p-6 border border-slate-100">
                   <h2 className="text-lg font-medium text-slate-800 mb-4">{selectedRoute.name}</h2>
-                  <Map 
-                    markers={mapMarkers} 
-                    routes={routeLine} 
-                    className="h-[400px]" 
+                  <Map
+                    markers={mapMarkers}
+                    // routes={[]} // Remove static routes
+                    className="h-[400px]"
                     // Center map on the first stop, or Pune if empty
-                    center={routeStops.length > 0 
-                        ? [routeStops[0].stops.latitude, routeStops[0].stops.longitude] 
-                        : undefined}
-                  />
+                    center={routeStops.length > 0
+                      ? [routeStops[0].stops.latitude, routeStops[0].stops.longitude]
+                      : undefined}
+                  >
+                    <RoutingControl
+                      waypoints={routeStops.map(rs => ({ lat: rs.stops.latitude, lng: rs.stops.longitude }))}
+                      lineColor="#6366f1"
+                    />
+                  </Map>
                 </div>
 
                 <div className="bg-white rounded-xl shadow-sm p-6 border border-slate-100">

@@ -34,6 +34,12 @@ export default function RoutingControl({ waypoints, lineColor = '#6366f1' }: Rou
             createMarker: function () { return null; }
         } as any).addTo(map);
 
+        // HACK: Explicitly hide the container because 'show: false' sometimes leaves an empty box or doesn't fully suppress it in some versions
+        const container = routingControl.getContainer();
+        if (container) {
+            container.style.display = 'none';
+        }
+
         return () => {
             try {
                 map.removeControl(routingControl);

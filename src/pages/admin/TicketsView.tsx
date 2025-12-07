@@ -14,10 +14,37 @@ export default function TicketsView() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    loadTickets();
+    // Run cleanup then load
+    const init = async () => {
+      await autoCancelOldTickets();
+      await loadTickets();
+    };
+    init();
   }, []);
 
+  const autoCancelOldTickets = async () => {
+    // Logic: Find entries older than 3 hours that are 'booked'
+    const threeHoursAgo = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString();
+
+    // 1. Get IDs to cancel (limited by RLS, so Admin must have access)
+    const { data: expiredTickets } = await supabase
+      .from('tickets')
+      .select('id')
+      .eq('status', 'booked')
+      .lt('created_at', threeHoursAgo);
+
+    if (expiredTickets && expiredTickets.length > 0) {
+      const ids = expiredTickets.map(t => t.id);
+      // 2. Bulk update
+      await supabase
+        .from('tickets')
+        .update({ status: 'cancelled' })
+        .in('id', ids);
+    }
+  };
+
   const loadTickets = async () => {
+    setLoading(true);
     const { data } = await supabase
       .from('tickets')
       .select(`
@@ -100,6 +127,12 @@ export default function TicketsView() {
           <h1 className="text-2xl font-bold text-slate-800 tracking-tight">Ticket Bookings</h1>
           <p className="text-slate-500">Monitor all user bookings in real-time.</p>
         </div>
+        <button
+          onClick={loadTickets}
+          className="px-4 py-2 bg-white border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50 transition text-sm font-medium shadow-sm"
+        >
+          Refresh List
+        </button>
       </div>
 
       <DataGrid
