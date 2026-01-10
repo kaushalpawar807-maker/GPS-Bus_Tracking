@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
-import { supabase, Route, Stop } from '../../lib/supabase';
+import { supabase, Stop } from '../../lib/supabase';
 import Map from '../../components/Map';
 import { LatLngExpression } from 'leaflet';
-import { RevenueChart } from '../../components/AnalyticsCharts'; // FleetStatusChart removed/replaced by FleetList
+import { RevenueChart } from '../../components/AnalyticsCharts';
 import { Activity, Zap, TrendingUp, Users, AlertTriangle, CheckCircle } from 'lucide-react';
 import { getSimulatedBusMarkers } from '../../utils/simulatedBus';
 import { AreaChart, Area, ResponsiveContainer } from 'recharts';
+import HardwareMonitor from '../../components/HardwareMonitor';
+import { hardwareService } from '../../services/HardwareService';
 
 function Sparkline({ data, color }: { data: number[]; color: string }) {
   const chartData = data.map((val, i) => ({ i, val }));
@@ -46,8 +48,25 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({ totalBuses: 0, totalRoutes: 0, totalUsers: 0, totalTickets: 0 });
   const [stops, setStops] = useState<Stop[]>([]);
+  const [recentAlerts, setRecentAlerts] = useState<any[]>([]);
 
   useEffect(() => {
+    // Subscribe to Hardware Alerts
+    hardwareService.subscribeToGlobalEvents((data: any) => {
+      if (data && (data.type === 'COLLISION' || data.type === 'ROLLOVER')) {
+        setRecentAlerts(prev => {
+          // Prevent duplicates roughly by timestamp if needed, or just prepend
+          // For now, simple prepend and slice
+          const newAlert = { ...data, timestamp: data.timestamp || new Date().toISOString() };
+          return [newAlert, ...prev].slice(0, 5);
+        });
+      }
+    });
+
+    // Cleanup if service supported returning an unsubscribe function directly, 
+    // but our service currently doesn't return one from this method.
+    // We can leave it for now as dashboard usually stays mounted, or add unsubscribe logic later.
+
     loadDashboardData();
   }, []);
 
@@ -67,7 +86,6 @@ export default function AdminDashboard() {
         totalUsers: usersRes.count || 0,
         totalTickets: ticketsRes.count || 0,
       });
-      console.log('Stats loaded:', { buses: busesRes.count, routes: routesRes.count });
       setStops(stopsRes.data || []);
     } catch (e) {
       console.error(e);
@@ -92,12 +110,15 @@ export default function AdminDashboard() {
       <div className="flex justify-between items-end">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Control Tower</h1>
-          <p className="text-slate-500 text-sm">Overview of fleet operations.</p>
+          <p className="text-slate-500 text-sm">Overview of fleet operations and real-time safety.</p>
         </div>
         <div className="flex items-center gap-2 text-xs font-medium text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-full border border-emerald-100 animate-pulse">
           <Activity className="w-3 h-3" /> System Operational
         </div>
       </div>
+
+      {/* Real-time Hardware Monitor */}
+      <HardwareMonitor />
 
       {/* KPI Row */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -143,37 +164,37 @@ export default function AdminDashboard() {
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-0 overflow-hidden flex flex-col">
           <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
             <h3 className="font-semibold text-slate-800">Fleet Health</h3>
-            <span className="text-xs font-medium bg-rose-100 text-rose-700 px-2 py-0.5 rounded-full">2 Alerts</span>
+            <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${recentAlerts.length > 0 ? 'bg-rose-100 text-rose-700' : 'bg-green-100 text-green-700'}`}>
+              {recentAlerts.length} Alerts
+            </span>
           </div>
           <div className="divide-y divide-slate-100 overflow-y-auto flex-1 max-h-[300px]">
-            {/* Mock Alerts */}
-            <div className="p-4 flex gap-3 hover:bg-slate-50 transition-colors cursor-pointer">
-              <div className="mt-1 bg-rose-50 p-1.5 rounded-md text-rose-600">
-                <AlertTriangle className="w-4 h-4" />
+            {recentAlerts.length === 0 ? (
+              <div className="p-8 text-center text-slate-400 text-sm">
+                <CheckCircle className="w-8 h-8 mx-auto mb-2 text-emerald-200" />
+                <p>All System Normal</p>
+                <p className="text-xs mt-1">No recent safety incidents reported.</p>
               </div>
-              <div>
-                <p className="text-sm font-medium text-slate-900">Bus MH-12-Code-Red</p>
-                <p className="text-xs text-slate-500">Engine Overheat Warning • 2m ago</p>
-              </div>
-            </div>
-            <div className="p-4 flex gap-3 hover:bg-slate-50 transition-colors cursor-pointer">
-              <div className="mt-1 bg-amber-50 p-1.5 rounded-md text-amber-600">
-                <Zap className="w-4 h-4" />
-              </div>
-              <div>
-                <p className="text-sm font-medium text-slate-900">Bus MH-14-AZ-99</p>
-                <p className="text-xs text-slate-500">Scheduled Maintenance Due • 2h ago</p>
-              </div>
-            </div>
-            <div className="p-4 flex gap-3 hover:bg-slate-50 transition-colors cursor-pointer">
-              <div className="mt-1 bg-emerald-50 p-1.5 rounded-md text-emerald-600">
-                <CheckCircle className="w-4 h-4" />
-              </div>
-              <div>
-                <p className="text-sm font-medium text-slate-900">Bus MH-12-FC-22</p>
-                <p className="text-xs text-slate-500">Back Online • 5h ago</p>
-              </div>
-            </div>
+            ) : (
+              recentAlerts.map((alert, idx) => (
+                <div key={`${alert.timestamp}-${idx}`} className="p-4 flex gap-3 hover:bg-slate-50 transition-colors cursor-pointer animate-in slide-in-from-right-2 duration-300">
+                  <div className={`mt-1 p-1.5 rounded-md ${alert.type === 'COLLISION' ? 'bg-rose-50 text-rose-600' : 'bg-amber-50 text-amber-600'}`}>
+                    {alert.type === 'COLLISION' ? <AlertTriangle className="w-4 h-4" /> : <Zap className="w-4 h-4" />}
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                      {alert.type} ALERT
+                      <span className="text-[10px] px-1.5 py-0.5 bg-slate-100 rounded border border-slate-200 font-mono">
+                        {new Date(alert.timestamp).toLocaleTimeString()}
+                      </span>
+                    </p>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      Severity: {alert.severity || 'Unknown'} • Force: {alert.impact_force || alert.impact_g_force || 0}G
+                    </p>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
           <div className="p-3 bg-slate-50 text-center border-t border-slate-100">
             <button className="text-xs font-medium text-indigo-600 hover:text-indigo-700">View All Maintenance Logs</button>

@@ -50,7 +50,7 @@ export default function Header() {
             <div className="flex items-center gap-4">
                 <div className="flex items-center gap-2">
                     <div className="flex flex-col items-end mr-2 hidden md:flex">
-                        <span className="text-xs font-semibold text-slate-700">Kaushal's Org</span>
+                        <span className="text-xs font-semibold text-slate-700">PMPL Org</span>
                         <span className="text-xs text-slate-500">Pro Plan</span>
                     </div>
                     <button className="relative p-2 hover:bg-slate-100 rounded-full text-slate-500 hover:text-indigo-600 transition-colors">

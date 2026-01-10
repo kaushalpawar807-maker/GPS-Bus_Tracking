@@ -2,12 +2,12 @@ import { useEffect, useState } from 'react';
 import { supabase, Bus, Route } from '../../lib/supabase';
 import { Plus } from 'lucide-react';
 import DataGrid, { Column } from '../../components/DataGrid';
-
 import { useNavigate } from 'react-router-dom';
 
 export default function BusesManagement() {
   const [buses, setBuses] = useState<(Bus & { routes?: Route })[]>([]);
-  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingBus, setEditingBus] = useState<(Bus & { routes?: Route }) | null>(null);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
@@ -25,17 +25,24 @@ export default function BusesManagement() {
     setLoading(false);
   };
 
-  const handleRowAction = (action: string, bus: Bus) => {
-    if (action === 'view_map') {
-      // Navigate to the live tracking view for this bus
-      navigate(`/user/track/${bus.id}`);
-    } else if (action === 'edit') {
-      // TODO: Implement Edit Modal
-      setShowCreateModal(true);
-    } else if (action === 'delete') {
-      // TODO: Implement Delete
-      alert(`Delete bus ${bus.bus_number}?`);
-    }
+  const handleCreate = () => {
+    setEditingBus(null);
+    setIsModalOpen(true);
+  };
+
+  const handleEdit = (bus: Bus & { routes?: Route }) => {
+    setEditingBus(bus);
+    setIsModalOpen(true);
+  };
+
+  const handleModalClose = () => {
+    setIsModalOpen(false);
+    setEditingBus(null);
+  };
+
+  const handleModalSuccess = () => {
+    handleModalClose();
+    loadBuses();
   };
 
   const columns: Column<Bus & { routes?: Route }>[] = [
@@ -80,11 +87,32 @@ export default function BusesManagement() {
       ),
     },
     {
+      key: 'device_id',
+      header: 'Hardware Device',
+      render: (bus) => (
+        bus.device_id ? (
+          <code className="px-2 py-1 bg-slate-100 text-slate-600 rounded text-xs font-mono border border-slate-200">
+            {bus.device_id}
+          </code>
+        ) : (
+          <span className="text-slate-400 text-xs italic">Unlinked</span>
+        )
+      ),
+    },
+    {
       key: 'actions',
       header: 'Actions',
       align: 'right',
-      render: () => (
-        <button className="text-indigo-600 hover:text-indigo-900 font-medium text-xs">Edit</button>
+      render: (bus) => (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            handleEdit(bus);
+          }}
+          className="text-indigo-600 hover:text-indigo-900 font-medium text-xs px-2 py-1 rounded hover:bg-slate-100"
+        >
+          Edit
+        </button>
       )
     }
   ];
@@ -94,10 +122,10 @@ export default function BusesManagement() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-slate-800 tracking-tight">Fleet Management</h1>
-          <p className="text-slate-500">Manage your bus fleet and assignments.</p>
+          <p className="text-slate-500">Manage your bus fleet and hardware assignments.</p>
         </div>
         <button
-          onClick={() => setShowCreateModal(true)}
+          onClick={handleCreate}
           className="flex items-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition shadow-lg shadow-indigo-200"
         >
           <Plus className="w-5 h-5 mr-2" />
@@ -110,29 +138,27 @@ export default function BusesManagement() {
         data={buses}
         loading={loading}
         title="All Vehicles"
-        description="Overview of all buses in the fleet."
-        onRowAction={handleRowAction}
+        description="Overview of all buses, routes, and connected hardware."
         onRowClick={(bus) => navigate(`/user/track/${bus.id}`)}
       />
 
-      {showCreateModal && (
-        <CreateBusModal
-          onClose={() => setShowCreateModal(false)}
-          onSuccess={() => {
-            setShowCreateModal(false);
-            loadBuses();
-          }}
+      {isModalOpen && (
+        <BusModal
+          initialData={editingBus}
+          onClose={handleModalClose}
+          onSuccess={handleModalSuccess}
         />
       )}
     </div>
   );
 }
 
-function CreateBusModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
-  const [busNumber, setBusNumber] = useState('');
-  const [capacity, setCapacity] = useState('40');
-  const [routeId, setRouteId] = useState('');
-  const [status, setStatus] = useState<'active' | 'inactive' | 'maintenance'>('active');
+function BusModal({ initialData, onClose, onSuccess }: { initialData: (Bus & { routes?: Route }) | null, onClose: () => void; onSuccess: () => void }) {
+  const [busNumber, setBusNumber] = useState(initialData?.bus_number || '');
+  const [capacity, setCapacity] = useState(initialData?.capacity.toString() || '40');
+  const [routeId, setRouteId] = useState(initialData?.route_id || '');
+  const [deviceId, setDeviceId] = useState(initialData?.device_id || '');
+  const [status, setStatus] = useState<'active' | 'inactive' | 'maintenance'>(initialData?.status || 'active');
   const [routes, setRoutes] = useState<Route[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -156,21 +182,44 @@ function CreateBusModal({ onClose, onSuccess }: { onClose: () => void; onSuccess
     try {
       const { data: { user } } = await supabase.auth.getUser();
 
-      const { error } = await supabase
-        .from('buses')
-        .insert([{
-          bus_number: busNumber,
-          capacity: parseInt(capacity),
-          route_id: routeId || null,
-          status,
-          created_by: user?.id
-        }]);
+      // Clean up common device ID issues (whitespace)
+      const cleanDeviceId = deviceId?.trim() || null;
 
-      if (error) throw error;
+      if (initialData) {
+        // UPDATE Existing Bus
+        const { error } = await supabase
+          .from('buses')
+          .update({
+            bus_number: busNumber,
+            capacity: parseInt(capacity),
+            route_id: routeId || null,
+            device_id: cleanDeviceId,
+            status,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', initialData.id);
+
+        if (error) throw error;
+      } else {
+        // CREATE New Bus
+        const { error } = await supabase
+          .from('buses')
+          .insert([{
+            bus_number: busNumber,
+            capacity: parseInt(capacity),
+            route_id: routeId || null,
+            device_id: cleanDeviceId,
+            status,
+            created_by: user?.id
+          }]);
+
+        if (error) throw error;
+      }
 
       onSuccess();
     } catch (error) {
-      console.error('Error creating bus:', error);
+      console.error('Error saving bus:', error);
+      alert('Failed to save bus details. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -179,7 +228,9 @@ function CreateBusModal({ onClose, onSuccess }: { onClose: () => void; onSuccess
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 animate-in fade-in duration-200">
       <div className="bg-white rounded-2xl p-8 max-w-md w-full mx-4 shadow-2xl scale-100 animate-in zoom-in-95 duration-200">
-        <h2 className="text-xl font-bold text-slate-800 mb-6">Add New Vehicle</h2>
+        <h2 className="text-xl font-bold text-slate-800 mb-6">
+          {initialData ? 'Edit Vehicle' : 'Add New Vehicle'}
+        </h2>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1.5">Bus Number</label>
@@ -191,6 +242,19 @@ function CreateBusModal({ onClose, onSuccess }: { onClose: () => void; onSuccess
               className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all placeholder:text-slate-400"
               placeholder="e.g., MH-12-AB-1234"
             />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">Hardware Device ID</label>
+            <input
+              type="text"
+              value={deviceId}
+              onChange={(e) => setDeviceId(e.target.value)}
+              className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all placeholder:text-slate-400 font-mono text-sm"
+              placeholder="e.g., collision_33161"
+            />
+            <p className="text-[10px] text-slate-500 mt-1">
+              Enter the exact key from the Firebase database.
+            </p>
           </div>
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1.5">Capacity</label>
@@ -241,7 +305,7 @@ function CreateBusModal({ onClose, onSuccess }: { onClose: () => void; onSuccess
               disabled={loading}
               className="flex-1 px-4 py-2.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition disabled:opacity-50 font-medium shadow-lg shadow-indigo-200"
             >
-              {loading ? 'Adding...' : 'Add Vehicle'}
+              {loading ? 'Saving...' : (initialData ? 'Save Changes' : 'Add Vehicle')}
             </button>
           </div>
         </form>

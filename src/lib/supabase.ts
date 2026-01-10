@@ -57,6 +57,7 @@ export interface Bus {
   capacity: number;
   route_id: string | null;
   status: 'active' | 'inactive' | 'maintenance';
+  device_id?: string | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;
