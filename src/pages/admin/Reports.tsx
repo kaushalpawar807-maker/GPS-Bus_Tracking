@@ -28,10 +28,10 @@ export default function Reports() {
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* Driver Performance */}
-                <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+                <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm min-h-[400px]">
                     <h2 className="text-lg font-semibold text-slate-800 mb-6">Driver Safety Scores</h2>
-                    <div className="h-[300px]">
-                        <ResponsiveContainer width="100%" height="100%">
+                    <div className="h-[300px] w-full">
+                        <ResponsiveContainer width="100%" height="100%" minWidth={0}>
                             <BarChart data={driverData} layout="vertical">
                                 <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} />
                                 <XAxis type="number" domain={[0, 100]} hide />

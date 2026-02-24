@@ -1,0 +1,45 @@
+SUMMARY OF PREDICTIVE MAINTENANCE SYSTEM IMPLEMENTATION
+=====================================================
+
+We have successfully integrated an AI-driven predictive maintenance system into the Bus Tracking project. This system links hardware sensor data with manual service records to predict vehicle health.
+
+1. DATA & MACHINE LEARNING MODEL
+--------------------------------
+- Created a custom 'Synthetic Dataset' generator (generate_dataset.py) to simulate 1,500 bus service records for training.
+- Developed an offline 'Model Training' script (train_model.py) using Linear Regression to identify wear-and-tear patterns.
+- Integrated a 'Real-time Prediction Engine' (MaintenanceService.ts) into the website that calculates service needs instantly as data changes.
+- Tuned the model to be highly sensitive to 'Vibration' and 'Harsh Driving', ensuring high sensor spikes immediately lower the vehicle's health score.
+
+2. DATABASE CHANGES
+-------------------
+- Created a new database table called 'maintenance_metrics' in Supabase.
+- This table acts as a bridge, storing:
+    * Manual inputs (KM since last service, days, breakdown history).
+    * Automatic hardware data (vibration levels, overspeed counts, harsh braking events).
+    * Predicted results (Days until next service).
+- Enabled 'Row Level Security' to ensure only authorized admins can modify this sensitive data.
+
+3. HARDWARE INTEGRATION (REAL-TIME)
+-----------------------------------
+- Updated the 'Hardware Service' (HardwareService.ts) to listen to your ESP32 sensor alerts in Firebase.
+- Whenever your hardware detects a collision or vibration spike:
+    * The system automatically logs it to the maintenance database.
+    * The ML model re-calculates the bus's health status.
+    * The website dashboard updates without needing a page refresh.
+
+4. USER INTERFACE (ADMIN PANEL)
+-------------------------------
+- Added a new 'Maintenance Control' link to the main Admin sidebar.
+- Built a comprehensive 'Maintenance Dashboard' (MaintenanceDashboard.tsx) providing:
+    * Fleet Overview: Total number of critical vs. healthy buses.
+    * Fleet Status Table: A list of all buses showing "Predicted Service In (Days)" and a visual "Health Bar".
+    * Manual Data Input: A pop-up menu for admins to log manual service events, which live-syncs with the ML model.
+    * Refresh Control: A quick-sync button to ensure the latest hardware data is displayed.
+
+5. CLEANUP & STABILITY
+----------------------
+- Fixed chart display issues on the 'Analytics Reports' page.
+- Cleaned up unused background code to ensure the website runs smoothly.
+- Added input validation to prevent errors (NaN) when entering maintenance data manually.
+
+All modules are now connected: Hardware -> Firebase -> Website ML -> Database.

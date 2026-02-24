@@ -12,6 +12,7 @@ import RouteStudio from './pages/admin/RouteStudio';
 import BusesManagement from './pages/admin/BusesManagement';
 import TicketsView from './pages/admin/TicketsView';
 import Reports from './pages/admin/Reports';
+import MaintenanceDashboard from './pages/admin/MaintenanceDashboard';
 
 import UserDashboard from './pages/user/UserDashboard';
 import RoutesSearch from './pages/user/RoutesSearch';
@@ -85,6 +86,11 @@ function App() {
           <Route path="/admin/reports" element={
             <ProtectedRoute allowedRoles={['admin']}>
               <DashboardLayout><Reports /></DashboardLayout>
+            </ProtectedRoute>
+          } />
+          <Route path="/admin/maintenance" element={
+            <ProtectedRoute allowedRoles={['admin']}>
+              <DashboardLayout><MaintenanceDashboard /></DashboardLayout>
             </ProtectedRoute>
           } />
 

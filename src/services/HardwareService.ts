@@ -27,54 +27,87 @@ export type CollisionData = {
     [key: string]: any; // Allow flexible keys
 };
 
+import { supabase } from '../lib/supabase';
+import { maintenanceService } from './MaintenanceService';
+
 class HardwareService {
     private activeListeners: Record<string, any> = {};
 
     /**
      * Subscribe to GLOBAL events using a Root Query.
-     * Listens for the latest added node (limitToLast 1).
      */
     subscribeToGlobalEvents(callback: (data: CollisionData | null) => void) {
-        console.log('[DEBUG] HardwareService: Subscribing to ROOT with limitToLast(1)...');
+        console.log('[DEBUG] HardwareService: Subscribing to ROOT...');
 
-        // Listen to the ROOT of the database
-        const rootRef = ref(database, '/');
-
-        // Query the last 1 item added (The latest incident)
+        const rootRef = ref(database, '/crash_alerts');
         const latestQuery = query(rootRef, limitToLast(1));
 
         const listener = onValue(latestQuery, (snapshot) => {
             if (snapshot.exists()) {
                 const val = snapshot.val();
-                console.log('[DEBUG] HardwareService: Root Snapshot:', val);
-
-                // value is an object with one key-value pair, e.g. { "rollover_123": { ... } }
                 const keys = Object.keys(val);
                 if (keys.length > 0) {
-                    // Start sorting to find the actually "newest" if keys aren't chronological?
-                    // Firebase keys are often chronological (push IDs) or if bespoke, we rely on limitToLast.
-                    // Since we requested limitToLast(1), we just take the last key locally if multiple returned due to rapid updates?
-                    // Object.keys order isn't guaranteed in JS, but usually insertion order for non-integers.
-                    // Safe bet: take the last key if multiple, or just the one.
-
                     const latestKey = keys[keys.length - 1];
-                    const data = val[latestKey];
-                    console.log(`[DEBUG] HardwareService: Latest Event [${latestKey}]:`, data);
+                    const data = val[latestKey] as CollisionData;
 
-                    callback(data as CollisionData);
+                    // Process for Maintenance ML
+                    this.processMaintenanceData(data);
+
+                    callback(data);
                 }
-            } else {
-                console.log('[DEBUG] HardwareService: No data at root.');
             }
         });
 
-        // Store listener for cleanup (simplified for global singleton usage)
         this.activeListeners['global'] = { ref: rootRef, listener };
     }
 
+    private async processMaintenanceData(data: CollisionData) {
+        // Logic to link alert to a bus. 
+        // In a real system, device_id would be in the payload.
+        // For now, we'll find a bus that matches this device_id or use a default if it's a demo.
+        try {
+            const { data: bus } = await supabase
+                .from('buses')
+                .select('id')
+                .not('device_id', 'is', null)
+                .limit(1)
+                .single();
+
+            if (!bus) return;
+
+            // Derived Metrics Logic
+            const isOverspeed = (data.impact_force || 0) > 20; // Simulated logic
+            const isHarshShift = data.type === 'COLLISION' && (data.impact_force || 0) > 15;
+            const vibration = Math.abs((data.accel_x || 0) + (data.accel_y || 0) + (data.accel_z || 0)) / 30;
+
+            // Update Supabase maintenance_metrics incrementaly
+            // Note: In production, you'd use a windowing function or Postgres increment
+            const { data: current } = await supabase
+                .from('maintenance_metrics')
+                .select('*')
+                .eq('bus_id', bus.id)
+                .single();
+
+            const update = {
+                bus_id: bus.id,
+                vibration_index: vibration, // Most recent vibration
+                overspeed_count: (current?.overspeed_count || 0) + (isOverspeed ? 1 : 0),
+                harsh_brake_count: (current?.harsh_brake_count || 0) + (isHarshShift ? 1 : 0),
+                updated_at: new Date().toISOString()
+            };
+
+            await supabase.from('maintenance_metrics').upsert(update, { onConflict: 'bus_id' });
+
+            // Re-predict
+            await maintenanceService.updateMetricsAndPredict(bus.id, {});
+
+            console.log(`[ML] Maintenance metrics updated for bus ${bus.id}`);
+        } catch (e) {
+            console.error('[ML] Error processing hardware data:', e);
+        }
+    }
+
     unsubscribeGlobal() {
-        // In a real app we would properly off(ref, listener)
-        // For now, this is a singleton service that lives as long as the app
         if (this.activeListeners['global']) {
             off(this.activeListeners['global'].ref);
             delete this.activeListeners['global'];
@@ -84,11 +117,12 @@ class HardwareService {
     // Legacy methods kept for compatibility but deprecated
     subscribeToDevice(deviceId: string, callback: (data: CollisionData | null) => void) {
         // No-op or redirect to global if needed
-        console.warn('subscribeToDevice is deprecated in favor of Global Listener');
+        console.warn('subscribeToDevice is deprecated in favor of Global Listener', deviceId, callback);
     }
 
     unsubscribeFromDevice(deviceId: string) {
         // No-op
+        console.warn('unsubscribeFromDevice is deprecated', deviceId);
     }
 
     /**
@@ -96,6 +130,7 @@ class HardwareService {
      */
     subscribeToAllActiveDevices(deviceIds: string[], callback: (deviceId: string, data: CollisionData) => void) {
         // Deprecated in favor of global root listener
+        console.warn('subscribeToAllActiveDevices is deprecated', deviceIds, callback);
     }
 }
 

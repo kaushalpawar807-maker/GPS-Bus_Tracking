@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { supabase, Bus, Route } from '../../lib/supabase';
-import { Plus } from 'lucide-react';
+import { supabase, Bus, Route, Profile } from '../../lib/supabase';
+import { Plus, User } from 'lucide-react';
 import DataGrid, { Column } from '../../components/DataGrid';
 import { useNavigate } from 'react-router-dom';
 
@@ -18,7 +18,7 @@ export default function BusesManagement() {
   const loadBuses = async () => {
     const { data } = await supabase
       .from('buses')
-      .select('*, routes(*)')
+      .select('*, routes(*), profiles:driver_id(*)')
       .order('created_at', { ascending: false });
 
     setBuses(data || []);
@@ -83,6 +83,25 @@ export default function BusesManagement() {
           </div>
         ) : (
           <span className="text-slate-400 italic">Unassigned</span>
+        )
+      ),
+    },
+    {
+      key: 'driver',
+      header: 'Assigned Driver',
+      render: (bus: any) => (
+        bus.profiles ? (
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 bg-slate-100 rounded-full flex items-center justify-center text-slate-500">
+              <User className="w-4 h-4" />
+            </div>
+            <div className="flex flex-col">
+              <span className="font-medium text-slate-800 text-sm">{bus.profiles.full_name || bus.profiles.email}</span>
+              <span className="text-[10px] text-slate-400">{bus.profiles.phone || 'No Phone'}</span>
+            </div>
+          </div>
+        ) : (
+          <span className="text-slate-400 text-xs italic">Unassigned</span>
         )
       ),
     },
@@ -157,22 +176,25 @@ function BusModal({ initialData, onClose, onSuccess }: { initialData: (Bus & { r
   const [busNumber, setBusNumber] = useState(initialData?.bus_number || '');
   const [capacity, setCapacity] = useState(initialData?.capacity.toString() || '40');
   const [routeId, setRouteId] = useState(initialData?.route_id || '');
+  const [driverId, setDriverId] = useState(initialData?.driver_id || '');
   const [deviceId, setDeviceId] = useState(initialData?.device_id || '');
   const [status, setStatus] = useState<'active' | 'inactive' | 'maintenance'>(initialData?.status || 'active');
   const [routes, setRoutes] = useState<Route[]>([]);
+  const [drivers, setDrivers] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    loadRoutes();
+    loadOptions();
   }, []);
 
-  const loadRoutes = async () => {
-    const { data } = await supabase
-      .from('routes')
-      .select('*')
-      .eq('is_active', true);
+  const loadOptions = async () => {
+    const [routesRes, driversRes] = await Promise.all([
+      supabase.from('routes').select('*').eq('is_active', true),
+      supabase.from('profiles').select('*').eq('role', 'driver')
+    ]);
 
-    setRoutes(data || []);
+    setRoutes(routesRes.data || []);
+    setDrivers(driversRes.data || []);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -193,6 +215,7 @@ function BusModal({ initialData, onClose, onSuccess }: { initialData: (Bus & { r
             bus_number: busNumber,
             capacity: parseInt(capacity),
             route_id: routeId || null,
+            driver_id: driverId || null,
             device_id: cleanDeviceId,
             status,
             updated_at: new Date().toISOString()
@@ -208,6 +231,7 @@ function BusModal({ initialData, onClose, onSuccess }: { initialData: (Bus & { r
             bus_number: busNumber,
             capacity: parseInt(capacity),
             route_id: routeId || null,
+            driver_id: driverId || null,
             device_id: cleanDeviceId,
             status,
             created_by: user?.id
@@ -277,6 +301,21 @@ function BusModal({ initialData, onClose, onSuccess }: { initialData: (Bus & { r
               <option value="">Not assigned</option>
               {routes.map(route => (
                 <option key={route.id} value={route.id}>{route.name}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">Assign Driver</label>
+            <select
+              value={driverId}
+              onChange={(e) => setDriverId(e.target.value)}
+              className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
+            >
+              <option value="">No driver assigned</option>
+              {drivers.map(driver => (
+                <option key={driver.id} value={driver.id}>
+                  {driver.full_name || driver.email}
+                </option>
               ))}
             </select>
           </div>

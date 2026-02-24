@@ -28,6 +28,7 @@ export default function Sidebar() {
             { icon: MapPin, label: 'Route Studio', path: '/admin/route-studio' },
             { icon: Ticket, label: 'Ticket Bookings', path: '/admin/tickets' },
             { icon: FileText, label: 'Analytics Reports', path: '/admin/reports' },
+            { icon: Settings, label: 'Maintenance Control', path: '/admin/maintenance' },
         ],
         user: [
             { icon: LayoutDashboard, label: 'Dashboard', path: '/user' },
