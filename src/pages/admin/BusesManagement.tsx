@@ -18,7 +18,7 @@ export default function BusesManagement() {
   const loadBuses = async () => {
     const { data } = await supabase
       .from('buses')
-      .select('*, routes(*), profiles:driver_id(*)')
+      .select('*, routes(*), driver:driver_id(*), conductor:conductor_id(*)')
       .order('created_at', { ascending: false });
 
     setBuses(data || []);
@@ -90,14 +90,33 @@ export default function BusesManagement() {
       key: 'driver',
       header: 'Assigned Driver',
       render: (bus: any) => (
-        bus.profiles ? (
+        bus.driver ? (
           <div className="flex items-center gap-2">
             <div className="w-7 h-7 bg-slate-100 rounded-full flex items-center justify-center text-slate-500">
               <User className="w-4 h-4" />
             </div>
             <div className="flex flex-col">
-              <span className="font-medium text-slate-800 text-sm">{bus.profiles.full_name || bus.profiles.email}</span>
-              <span className="text-[10px] text-slate-400">{bus.profiles.phone || 'No Phone'}</span>
+              <span className="font-medium text-slate-800 text-sm">{bus.driver.full_name || bus.driver.email}</span>
+              <span className="text-[10px] text-slate-400">{bus.driver.phone || 'No Phone'}</span>
+            </div>
+          </div>
+        ) : (
+          <span className="text-slate-400 text-xs italic">Unassigned</span>
+        )
+      ),
+    },
+    {
+      key: 'conductor',
+      header: 'Assigned Conductor',
+      render: (bus: any) => (
+        bus.conductor ? (
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 bg-indigo-50 rounded-full flex items-center justify-center text-indigo-500">
+              <User className="w-4 h-4" />
+            </div>
+            <div className="flex flex-col">
+              <span className="font-medium text-slate-800 text-sm">{bus.conductor.full_name || bus.conductor.email}</span>
+              <span className="text-[10px] text-slate-400">{bus.conductor.phone || 'No Phone'}</span>
             </div>
           </div>
         ) : (
@@ -177,10 +196,12 @@ function BusModal({ initialData, onClose, onSuccess }: { initialData: (Bus & { r
   const [capacity, setCapacity] = useState(initialData?.capacity.toString() || '40');
   const [routeId, setRouteId] = useState(initialData?.route_id || '');
   const [driverId, setDriverId] = useState(initialData?.driver_id || '');
+  const [conductorId, setConductorId] = useState(initialData?.conductor_id || '');
   const [deviceId, setDeviceId] = useState(initialData?.device_id || '');
   const [status, setStatus] = useState<'active' | 'inactive' | 'maintenance'>(initialData?.status || 'active');
   const [routes, setRoutes] = useState<Route[]>([]);
   const [drivers, setDrivers] = useState<Profile[]>([]);
+  const [conductors, setConductors] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -188,13 +209,15 @@ function BusModal({ initialData, onClose, onSuccess }: { initialData: (Bus & { r
   }, []);
 
   const loadOptions = async () => {
-    const [routesRes, driversRes] = await Promise.all([
+    const [routesRes, driversRes, conductorsRes] = await Promise.all([
       supabase.from('routes').select('*').eq('is_active', true),
-      supabase.from('profiles').select('*').eq('role', 'driver')
+      supabase.from('profiles').select('*').eq('role', 'driver'),
+      supabase.from('profiles').select('*').eq('role', 'conductor')
     ]);
 
     setRoutes(routesRes.data || []);
     setDrivers(driversRes.data || []);
+    setConductors(conductorsRes.data || []);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -216,6 +239,7 @@ function BusModal({ initialData, onClose, onSuccess }: { initialData: (Bus & { r
             capacity: parseInt(capacity),
             route_id: routeId || null,
             driver_id: driverId || null,
+            conductor_id: conductorId || null,
             device_id: cleanDeviceId,
             status,
             updated_at: new Date().toISOString()
@@ -232,6 +256,7 @@ function BusModal({ initialData, onClose, onSuccess }: { initialData: (Bus & { r
             capacity: parseInt(capacity),
             route_id: routeId || null,
             driver_id: driverId || null,
+            conductor_id: conductorId || null,
             device_id: cleanDeviceId,
             status,
             created_by: user?.id
@@ -315,6 +340,21 @@ function BusModal({ initialData, onClose, onSuccess }: { initialData: (Bus & { r
               {drivers.map(driver => (
                 <option key={driver.id} value={driver.id}>
                   {driver.full_name || driver.email}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">Assign Conductor</label>
+            <select
+              value={conductorId}
+              onChange={(e) => setConductorId(e.target.value)}
+              className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
+            >
+              <option value="">No conductor assigned</option>
+              {conductors.map(conductor => (
+                <option key={conductor.id} value={conductor.id}>
+                  {conductor.full_name || conductor.email}
                 </option>
               ))}
             </select>

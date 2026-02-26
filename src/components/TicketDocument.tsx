@@ -94,6 +94,7 @@ interface TicketProps {
     busNumber: string;
     price: number;
     ticketId: string;
+    qrDataUrl?: string;
 }
 
 // Create Document Component
@@ -179,11 +180,16 @@ export const TicketDocument = ({ ticket }: { ticket: TicketProps }) => (
                 </Text>
             </View>
 
-            {/* QR Placeholder */}
+            {/* QR Section */}
             <View style={styles.qrPlaceholder}>
-                <Text style={{ fontSize: 8, color: '#cbd5e1' }}>SCAN ME</Text>
-                {/* In a real app, an Image tag with generated QR data URI would go here */}
-                <View style={{ width: 60, height: 60, borderWidth: 4, borderColor: '#000' }}></View>
+                {ticket.qrDataUrl ? (
+                    <Image src={ticket.qrDataUrl} style={{ width: 80, height: 80 }} />
+                ) : (
+                    <>
+                        <Text style={{ fontSize: 8, color: '#cbd5e1' }}>SCAN ME</Text>
+                        <View style={{ width: 60, height: 60, borderWidth: 4, borderColor: '#000' }}></View>
+                    </>
+                )}
             </View>
 
             {/* Footer */}

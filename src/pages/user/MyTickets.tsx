@@ -4,9 +4,11 @@ import { supabase, Ticket } from '../../lib/supabase';
 import { ArrowLeft, Ticket as TicketIcon, Download } from 'lucide-react';
 import { PDFDownloadLink } from '@react-pdf/renderer';
 import { TicketDocument } from '../../components/TicketDocument';
+import QRCode from 'qrcode';
 
 export default function MyTickets() {
   const [tickets, setTickets] = useState<Ticket[]>([]);
+  const [qrCodes, setQrCodes] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -30,6 +32,16 @@ export default function MyTickets() {
       .order('created_at', { ascending: false });
 
     setTickets(data || []);
+
+    // Generate QR codes for all tickets
+    if (data) {
+      const qrMap: Record<string, string> = {};
+      await Promise.all(data.map(async (t) => {
+        qrMap[t.id] = await QRCode.toDataURL(t.id);
+      }));
+      setQrCodes(qrMap);
+    }
+
     setLoading(false);
   };
 
@@ -131,7 +143,8 @@ export default function MyTickets() {
                               time: new Date(ticket.booking_date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
                               busNumber: "MH-12-SF-4501",
                               price: 15.00,
-                              ticketId: ticket.id
+                              ticketId: ticket.id,
+                              qrDataUrl: qrCodes[ticket.id]
                             }}
                           />
                         }
