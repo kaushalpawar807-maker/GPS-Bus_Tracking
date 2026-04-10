@@ -14,6 +14,16 @@ export default {
       fontFamily: {
         sans: ['Inter', 'sans-serif'],
       },
+      animation: {
+        'spin-slow': 'spin 3s linear infinite',
+        'progress-fast': 'progress 1s linear infinite',
+      },
+      keyframes: {
+        progress: {
+          '0%': { transform: 'translateX(-100%)' },
+          '100%': { transform: 'translateX(100%)' },
+        }
+      }
     },
   },
   plugins: [],

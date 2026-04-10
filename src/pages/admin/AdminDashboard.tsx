@@ -7,7 +7,8 @@ import { Activity, Zap, TrendingUp, Users, AlertTriangle, CheckCircle } from 'lu
 import { getSimulatedBusMarkers } from '../../utils/simulatedBus';
 import { AreaChart, Area, ResponsiveContainer } from 'recharts';
 import HardwareMonitor from '../../components/HardwareMonitor';
-import { hardwareService } from '../../services/HardwareService';
+import { hardwareService, CollisionData } from '../../services/HardwareService';
+import HazardAlertOverlay from '../../components/HazardAlertOverlay';
 
 function Sparkline({ data, color }: { data: number[]; color: string }) {
   const chartData = data.map((val, i) => ({ i, val }));
@@ -49,23 +50,24 @@ export default function AdminDashboard() {
   const [stats, setStats] = useState({ totalBuses: 0, totalRoutes: 0, totalUsers: 0, totalTickets: 0 });
   const [stops, setStops] = useState<Stop[]>([]);
   const [recentAlerts, setRecentAlerts] = useState<any[]>([]);
+  const [activeHazard, setActiveHazard] = useState<CollisionData | null>(null);
 
   useEffect(() => {
     // Subscribe to Hardware Alerts
     hardwareService.subscribeToGlobalEvents((data: any) => {
       if (data && (data.type === 'COLLISION' || data.type === 'ROLLOVER')) {
+        // Update list for sidebar
         setRecentAlerts(prev => {
-          // Prevent duplicates roughly by timestamp if needed, or just prepend
-          // For now, simple prepend and slice
           const newAlert = { ...data, timestamp: data.timestamp || new Date().toISOString() };
+          // Check for exact duplicate in recent list
+          if (prev.some(a => a.timestamp === newAlert.timestamp && a.type === newAlert.type)) return prev;
           return [newAlert, ...prev].slice(0, 5);
         });
+
+        // Trigger the popup overlay
+        setActiveHazard(data);
       }
     });
-
-    // Cleanup if service supported returning an unsubscribe function directly, 
-    // but our service currently doesn't return one from this method.
-    // We can leave it for now as dashboard usually stays mounted, or add unsubscribe logic later.
 
     loadDashboardData();
   }, []);
@@ -214,6 +216,12 @@ export default function AdminDashboard() {
           </div>
         </div>
       </div>
+
+      {/* Hazard Alert Overlay */}
+      <HazardAlertOverlay 
+        data={activeHazard} 
+        onClose={() => setActiveHazard(null)} 
+      />
     </div>
   );
 }

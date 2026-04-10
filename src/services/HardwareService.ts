@@ -1,30 +1,28 @@
 import { database } from '../lib/firebase';
-import { ref, onValue, off, limitToLast, query } from 'firebase/database';
+import { ref, onValue, off } from 'firebase/database';
 
 export type CollisionData = {
-    // Basic Fields based on User Request
+    // Core Fields from Hardware
     type: 'COLLISION' | 'ROLLOVER';
-    timestamp: string;
-    severity?: string;
+    timestamp: number | string;
+    
+    // Accelerometer (Corrected to match hardware payload)
+    ax: number;
+    ay: number;
+    az: number;
+    
+    // Gyroscope (Corrected to match hardware payload)
+    gx: number;
+    gy: number;
+    gz: number;
 
-    // Impact Data
+    // Derived/Optional Fields
+    severity?: string;
     impact_force?: number;
     impact_g_force?: number;
 
-    // Gyro
-    gyro_x?: number;
-    gyro_y?: number;
-    gyro_z?: number;
-
-    // Accel
-    accel_x?: number;
-    accel_y?: number;
-    accel_z?: number;
-
-    // Raw fields observed in payload (optional)
-    collision_33161?: boolean; // Example of device specific flag
-    rollover_123212?: boolean;
-    [key: string]: any; // Allow flexible keys
+    // Legacy/Flexible support
+    [key: string]: any;
 };
 
 import { supabase } from '../lib/supabase';
@@ -37,23 +35,26 @@ class HardwareService {
      * Subscribe to GLOBAL events using a Root Query.
      */
     subscribeToGlobalEvents(callback: (data: CollisionData | null) => void) {
-        console.log('[DEBUG] HardwareService: Subscribing to ROOT...');
+        console.log('[DEBUG] HardwareService: Subscribing to crash_alerts...');
 
         const rootRef = ref(database, '/crash_alerts');
-        const latestQuery = query(rootRef, limitToLast(1));
-
-        const listener = onValue(latestQuery, (snapshot) => {
+        
+        // Listen to the whole node to catch updates to any child (collision or rollover)
+        const listener = onValue(rootRef, (snapshot) => {
             if (snapshot.exists()) {
                 const val = snapshot.val();
-                const keys = Object.keys(val);
-                if (keys.length > 0) {
-                    const latestKey = keys[keys.length - 1];
-                    const data = val[latestKey] as CollisionData;
-
-                    // Process for Maintenance ML
-                    this.processMaintenanceData(data);
-
-                    callback(data);
+                
+                // If it's the fixed structure { latest_collision: {...}, latest_rollover: {...} }
+                // we want to notify for the one that just changed.
+                
+                if (val.latest_collision) {
+                    this.processMaintenanceData(val.latest_collision);
+                    callback(val.latest_collision);
+                }
+                
+                if (val.latest_rollover) {
+                    this.processMaintenanceData(val.latest_rollover);
+                    callback(val.latest_rollover);
                 }
             }
         });
@@ -76,9 +77,10 @@ class HardwareService {
             if (!bus) return;
 
             // Derived Metrics Logic
-            const isOverspeed = (data.impact_force || 0) > 20; // Simulated logic
-            const isHarshShift = data.type === 'COLLISION' && (data.impact_force || 0) > 15;
-            const vibration = Math.abs((data.accel_x || 0) + (data.accel_y || 0) + (data.accel_z || 0)) / 30;
+            const impactForce = data.impact_force || Math.max(Math.abs(data.ax || 0), Math.abs(data.ay || 0), Math.abs(data.az || 0));
+            const isOverspeed = impactForce > 20; // Simulated logic
+            const isHarshShift = data.type === 'COLLISION' && impactForce > 15;
+            const vibration = Math.abs((data.ax || 0) + (data.ay || 0) + (data.az || 0)) / 30;
 
             // Update Supabase maintenance_metrics incrementaly
             // Note: In production, you'd use a windowing function or Postgres increment
